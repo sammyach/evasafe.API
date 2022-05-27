@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32421.90
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "evasafe.API", "evasafe.API\evasafe.API.csproj", "{846C9063-9E10-43EC-B3F8-DF6276F266EA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmailManager", "EmailManager\EmailManager.csproj", "{1DDFFBDA-5422-4339-8E2D-396A93C04A57}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{846C9063-9E10-43EC-B3F8-DF6276F266EA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{846C9063-9E10-43EC-B3F8-DF6276F266EA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{846C9063-9E10-43EC-B3F8-DF6276F266EA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{846C9063-9E10-43EC-B3F8-DF6276F266EA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1DDFFBDA-5422-4339-8E2D-396A93C04A57}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1DDFFBDA-5422-4339-8E2D-396A93C04A57}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1DDFFBDA-5422-4339-8E2D-396A93C04A57}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1DDFFBDA-5422-4339-8E2D-396A93C04A57}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E6517CC6-58A4-4A81-8075-E93DD0176F95}
+	EndGlobalSection
+EndGlobal
