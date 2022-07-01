@@ -1,9 +1,8 @@
 ﻿using EmailManager;
-using evasafe.API.Data;
+using evasafe.API.data;
 using evasafe.API.dtos;
 using evasafe.API.Helpers;
 using evasafe.API.utils;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -62,33 +61,109 @@ namespace evasafe.API.Controllers
         //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginDto login)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            var foundUser = await _context.EvAppUsers.Where(x => x.Email == login.Email).FirstOrDefaultAsync();
-            if (foundUser == null) return Unauthorized("Email not associated with any account.");
-            var hashedPassword = Rfc2898DeriveBytes.Pbkdf2(login.Password, foundUser?.Nacl, AppConstants.NUMBER_OF_ITERATIONS, AppConstants.KEY_ALGORITHM, AppConstants.KEY_LENGTH);
-            
-            if (!hashedPassword.SequenceEqual(foundUser.PasswordHash)) return Unauthorized("Wrong Password");
-            else
+            try
             {
-                foundUser.LastLoginDate = DateTime.UtcNow;
-                _context.Update(foundUser);
-                await _context.SaveChangesAsync();
-                //login user
-                //generate jwt
-                //var token = await generateJwtToken(foundUser);
-                return Ok(new AppUserDto(foundUser));
+                var app_req = new EvUserAppRequest { User = login.User, SourceIp = HttpContext.Connection?.RemoteIpAddress?.ToString(), TimeStamp = DateTime.UtcNow, Path = HttpContext.Request.Path, Successful = false };
+                HttpContext.Request.Headers.TryGetValue("LocalTime", out var localTime);
+                app_req.ClientLocalTime = localTime;
+                var remarks = "";
+                if (!ModelState.IsValid) return BadRequest(ModelState);
+                var foundUser = await _context.EvAppUsers.Where(x => x.Email == login.User || x.Username == login.User && !x.Deleted).FirstOrDefaultAsync();
+                if (foundUser == null)
+                {
+                    remarks = "Email/Username not associated with any account.";
+                    app_req.Remarks = remarks;
+                    _context.EvUserAppRequests.Add(app_req);
+                    await _context.SaveChangesAsync();
+                    return Unauthorized(remarks);
+                }
+                var hashedPassword = Rfc2898DeriveBytes.Pbkdf2(login.Password, foundUser?.Nacl, AppConstants.NUMBER_OF_ITERATIONS, AppConstants.KEY_ALGORITHM, AppConstants.KEY_LENGTH);
+
+                if (!hashedPassword.SequenceEqual(foundUser.PasswordHash))
+                {
+                    remarks = "Wrong Password";
+                    app_req.Remarks = remarks;
+                    _context.EvUserAppRequests.Add(app_req);
+                    await _context.SaveChangesAsync();
+                    return Unauthorized(remarks);
+                }
+                else if (!foundUser.Enabled)
+                {
+                    remarks = "Account not activated!";
+                    app_req.Remarks = remarks;
+                    _context.EvUserAppRequests.Add(app_req);
+                    await _context.SaveChangesAsync();
+                    return Unauthorized(remarks);
+                }
+                else
+                {
+                    var usr_sub = await _context.EvUserSubscriptions.Where(x => x.User == foundUser.Username).FirstOrDefaultAsync();
+                    app_req.Successful = true;
+                    app_req.Remarks = remarks;
+                    _context.EvUserAppRequests.Add(app_req);
+                    await _context.SaveChangesAsync();
+                    return Ok(new AppUserDto(foundUser, usr_sub));
+                    //foundUser.LastLoginDate = DateTime.UtcNow;
+                    //_context.Update(foundUser);
+                    //await _context.SaveChangesAsync();
+                    //login user
+                    //generate jwt
+                    //var token = await generateJwtToken(foundUser);
+                }
             }
+            catch (Exception e)
+            {
+                return BadRequest($"EVERR - {e.Message} -> {e.InnerException}");
+            }
+
+            
+        }
+
+        [HttpPost]
+        [Route("register/details")]
+        public async Task<IActionResult> RegisterDetails(RegisterDto data)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            try
+            {
+                //var foundUser = await _context.EvAppUsers.FindAsync(data.Username);
+                var res = await _context.EvAppUsers.Where(x=>x.Username == data.Username).CountAsync();
+                if (res > 0) {
+                    //username already exists
+                    //modify it
+                    data.Username = data.Username + DateTime.Now.Minute + DateTime.Now.Second;
+                }
+                var newUser = new EvAppUser { Username = data.Username, Email = data.Email, Enabled = false, Phone = data.Phone, FirstName = data.FirstName, LastName = data.LastName, Organization = data.Organization, JobTitle = data.JobTitle, Deleted = false };
+                var nacl = Utilities.GenerateRandomNaCl();
+                newUser.Nacl = nacl;
+                newUser.HashString = Utilities.GenerateHashString();
+                //hash password with generated nacl
+                newUser.PasswordHash = Rfc2898DeriveBytes.Pbkdf2(data.Password, nacl, AppConstants.NUMBER_OF_ITERATIONS, AppConstants.KEY_ALGORITHM, AppConstants.KEY_LENGTH);
+
+                newUser.DateCreated = DateTime.UtcNow;
+
+                await _context.EvAppUsers.AddAsync(newUser);
+                await _context.SaveChangesAsync();
+
+                return Ok(new AppUserDto(newUser, null));
+            }
+            catch (Exception e)
+            {
+                return BadRequest($"EVERR - {e.Message} -> {e.InnerException}");
+            }
+
             
         }
 
         [HttpPost]
         [Route("register")]
-        public async Task<IActionResult> Register(RegisterDto data)
+        public async Task<IActionResult> Register(LoginDto data)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
 
-            var newUser = new EvAppUser { Email = data.Email, Phone = data.Phone, FirstName = data.FirstName, LastName = data.LastName, Enabled = false };
+            var newUser = new EvAppUser { Email = data.User, Enabled = false };
             var nacl = Utilities.GenerateRandomNaCl();
             newUser.Nacl = nacl;
             newUser.HashString = Utilities.GenerateHashString();
@@ -99,7 +174,7 @@ namespace evasafe.API.Controllers
 
             await _context.EvAppUsers.AddAsync(newUser);
             await _context.SaveChangesAsync();
-            return Ok(new AppUserDto(newUser));
+            return Ok(new AppUserDto(newUser, null));
         }
 
         [HttpPatch]
@@ -110,8 +185,8 @@ namespace evasafe.API.Controllers
             if (data.Xcode != "qazplm") return BadRequest("Wrong xcode");
             try
             {
-                var foundUser = await _context.EvAppUsers.Where(x => x.Email == data.Email).FirstOrDefaultAsync();
-                if (foundUser == null) return BadRequest("Email not associated with any account.");
+                var foundUser = await _context.EvAppUsers.Where(x => x.Email == data.User || x.Username == data.User).FirstOrDefaultAsync();
+                if (foundUser == null) return BadRequest("Email/Username not associated with any account.");
                 foundUser.LastModifiedDate = DateTime.UtcNow;
                 foundUser.Enabled = data.Enabled;
                 _context.Update(foundUser);
@@ -124,6 +199,93 @@ namespace evasafe.API.Controllers
             }            
         }
 
+        [HttpPatch]
+        [Route("user/delete")]
+        public async Task<IActionResult> DeleteUser(LoginDto data)
+        {
+            var app_req = new EvUserAppRequest { User = data.User, SourceIp = HttpContext.Connection?.RemoteIpAddress?.ToString(), TimeStamp = DateTime.UtcNow, Path = HttpContext.Request.Path, Successful = false };
+            HttpContext.Request.Headers.TryGetValue("LocalTime", out var localTime);
+            app_req.ClientLocalTime = localTime;
+            var remarks = "";
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            try
+            {
+                var foundUser = await _context.EvAppUsers.Where(x => x.Email == data.User || x.Username == data.User).FirstOrDefaultAsync();
+                if (foundUser == null)
+                {
+                    remarks = "Email / Username not associated with any account.";
+                    app_req.Remarks = remarks;
+                    _context.EvUserAppRequests.Add(app_req);
+                    await _context.SaveChangesAsync();
+                    return BadRequest(remarks);
+                }
+
+                var hashedPassword = Rfc2898DeriveBytes.Pbkdf2(data.Password, foundUser?.Nacl, AppConstants.NUMBER_OF_ITERATIONS, AppConstants.KEY_ALGORITHM, AppConstants.KEY_LENGTH);
+
+                if (!hashedPassword.SequenceEqual(foundUser.PasswordHash))
+                {
+                    remarks = "Wrong Password";
+                    app_req.Remarks = remarks;
+                    _context.EvUserAppRequests.Add(app_req);
+                    await _context.SaveChangesAsync();
+                    return Unauthorized(remarks);
+                }
+
+                foundUser.LastModifiedDate = DateTime.UtcNow;
+                foundUser.Deleted = true;
+                foundUser.DateDeleted = DateTime.UtcNow;
+                _context.Update(foundUser);
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e);
+            }
+        }
+
+        [HttpPatch]
+        [Route("user/edit")]
+        public async Task<IActionResult> EditUser(UserDetailsDto data)
+        {
+            var app_req = new EvUserAppRequest { User = data.Username, SourceIp = HttpContext.Connection?.RemoteIpAddress?.ToString(), TimeStamp = DateTime.UtcNow, Path = HttpContext.Request.Path, Successful = false };
+            HttpContext.Request.Headers.TryGetValue("LocalTime", out var localTime);
+            app_req.ClientLocalTime = localTime;
+            var remarks = "";
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            //if (data.Xcode != "qazplm") return BadRequest("Wrong xcode");
+            try
+            {
+                var foundUser = await _context.EvAppUsers.Where(x => x.Username == data.Username).FirstOrDefaultAsync();
+                if (foundUser == null)
+                {
+                    remarks = "Username not associated with any account.";
+                    app_req.Remarks = remarks;
+                    _context.EvUserAppRequests.Add(app_req);
+                    await _context.SaveChangesAsync();
+                    return BadRequest();
+                }
+                foundUser.LastModifiedDate = DateTime.UtcNow;
+                foundUser.Email = data.Email;
+                foundUser.Phone = data.Phone;
+                foundUser.FirstName = data.FirstName;
+                foundUser.LastName = data.LastName;
+                foundUser.Organization = data.Organization;
+                foundUser.JobTitle = data.JobTitle;
+                _context.Update(foundUser);
+
+                app_req.Successful = true;
+                _context.EvUserAppRequests.Add(app_req);
+                await _context.SaveChangesAsync();
+                var usr_sub = await _context.EvUserSubscriptions.Where(x => x.User == foundUser.Username).FirstOrDefaultAsync();
+                return Ok(new AppUserDto(foundUser, usr_sub));
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e);
+            }
+        }
+
         [HttpGet]
         [Route("validateemail")]
         public async Task<IActionResult> ValidateEmail(string email) 
@@ -134,6 +296,27 @@ namespace evasafe.API.Controllers
             //var message = new Message(new string[] { email }, "Test email", "This is the content from our email. xoxo");
             //await _emailSender.SendEmailAsync(message);
             return Ok(bArr.Length + "-" + Convert.ToBase64String(bArr));
+        }
+
+        [HttpPost]
+        [Route("user/subscribe")]
+        public async Task<IActionResult> Subscribe(SubscribeDto data)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            try
+            {
+                var foundUser = await _context.EvAppUsers.Where(x => x.Username == data.Username).FirstOrDefaultAsync();
+                if (foundUser == null) return BadRequest();
+
+                var sub = new EvUserSubscription { User = data.Username, SubscriptionType = data.SubscriptionType, DateCreated = DateTime.UtcNow, EndDate = DateTime.UtcNow.AddDays(data.NumberOfDays) };
+                _context.EvUserSubscriptions.Add(sub);
+                await _context.SaveChangesAsync();
+                return Ok();
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e);
+            }
         }
 
         private async Task<string> generateJwtToken(EvAppUser user)
