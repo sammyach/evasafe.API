@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
-namespace evasafe.API.Data
+namespace evasafe.API.data
 {
     public partial class EVASAFEDBContext : DbContext
     {
@@ -17,12 +17,16 @@ namespace evasafe.API.Data
         }
 
         public virtual DbSet<EvAccountActionsType> EvAccountActionsTypes { get; set; } = null!;
+        public virtual DbSet<EvAppSubscription> EvAppSubscriptions { get; set; } = null!;
         public virtual DbSet<EvAppUser> EvAppUsers { get; set; } = null!;
         public virtual DbSet<EvUserAccountActionToken> EvUserAccountActionTokens { get; set; } = null!;
+        public virtual DbSet<EvUserAppRequest> EvUserAppRequests { get; set; } = null!;
+        public virtual DbSet<EvUserSubscription> EvUserSubscriptions { get; set; } = null!;
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            if (!optionsBuilder.IsConfigured) { 
+            if (!optionsBuilder.IsConfigured)
+            {
 
             }
         }
@@ -41,17 +45,36 @@ namespace evasafe.API.Data
                     .HasColumnName("action_type");
             });
 
+            modelBuilder.Entity<EvAppSubscription>(entity =>
+            {
+                entity.ToTable("ev_app_subscriptions");
+
+                entity.Property(e => e.Id).HasColumnName("id");
+
+                entity.Property(e => e.Active).HasColumnName("active");
+
+                entity.Property(e => e.Description)
+                    .HasMaxLength(100)
+                    .IsUnicode(false)
+                    .HasColumnName("description");
+
+                entity.Property(e => e.Name)
+                    .HasMaxLength(50)
+                    .IsUnicode(false)
+                    .HasColumnName("name");
+            });
+
             modelBuilder.Entity<EvAppUser>(entity =>
             {
-                entity.HasKey(e => e.Email)
+                entity.HasKey(e => e.Username)
                     .HasName("PK_app_users");
 
                 entity.ToTable("ev_app_users");
 
-                entity.Property(e => e.Email)
+                entity.Property(e => e.Username)
                     .HasMaxLength(256)
                     .IsUnicode(false)
-                    .HasColumnName("email");
+                    .HasColumnName("username");
 
                 entity.Property(e => e.DateCreated)
                     .HasColumnType("datetime")
@@ -62,6 +85,11 @@ namespace evasafe.API.Data
                     .HasColumnName("date_deleted");
 
                 entity.Property(e => e.Deleted).HasColumnName("deleted");
+
+                entity.Property(e => e.Email)
+                    .HasMaxLength(256)
+                    .IsUnicode(false)
+                    .HasColumnName("email");
 
                 entity.Property(e => e.Enabled).HasColumnName("enabled");
 
@@ -142,7 +170,73 @@ namespace evasafe.API.Data
                 entity.HasOne(d => d.UserNavigation)
                     .WithMany(p => p.EvUserAccountActionTokens)
                     .HasForeignKey(d => d.User)
-                    .HasConstraintName("FK__user_accou__user__31EC6D26");
+                    .HasConstraintName("FK__ev_user_ac__user__48CFD27E");
+            });
+
+            modelBuilder.Entity<EvUserAppRequest>(entity =>
+            {
+                entity.ToTable("ev_user_app_requests");
+
+                entity.Property(e => e.Id).HasColumnName("id");
+
+                entity.Property(e => e.ClientLocalTime)
+                    .HasMaxLength(255)
+                    .IsUnicode(false)
+                    .HasColumnName("client_local_time");
+
+                entity.Property(e => e.Path)
+                    .HasMaxLength(100)
+                    .IsUnicode(false)
+                    .HasColumnName("path");
+
+                entity.Property(e => e.Remarks)
+                    .HasMaxLength(300)
+                    .IsUnicode(false)
+                    .HasColumnName("remarks");
+
+                entity.Property(e => e.SourceIp)
+                    .HasMaxLength(50)
+                    .IsUnicode(false)
+                    .HasColumnName("source_ip");
+
+                entity.Property(e => e.Successful).HasColumnName("successful");
+
+                entity.Property(e => e.TimeStamp)
+                    .HasColumnType("datetime")
+                    .HasColumnName("time_stamp");
+
+                entity.Property(e => e.User)
+                    .HasMaxLength(1)
+                    .IsUnicode(false)
+                    .HasColumnName("user");
+            });
+
+            modelBuilder.Entity<EvUserSubscription>(entity =>
+            {
+                entity.ToTable("ev_user_subscriptions");
+
+                entity.Property(e => e.Id).HasColumnName("id");
+
+                entity.Property(e => e.DateCreated)
+                    .HasColumnType("datetime")
+                    .HasColumnName("date_created");
+
+                entity.Property(e => e.EndDate)
+                    .HasColumnType("datetime")
+                    .HasColumnName("end_date");
+
+                entity.Property(e => e.SubscriptionType).HasColumnName("subscription_type");
+
+                entity.Property(e => e.User)
+                    .HasMaxLength(256)
+                    .IsUnicode(false)
+                    .HasColumnName("user");
+
+                entity.HasOne(d => d.UserNavigation)
+                    .WithMany(p => p.EvUserSubscriptions)
+                    .HasForeignKey(d => d.User)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK__ev_user_su__user__49C3F6B7");
             });
 
             OnModelCreatingPartial(modelBuilder);

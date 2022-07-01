@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace evasafe.API.Data
+namespace evasafe.API.data
 {
     public partial class EvAccountActionsType
     {
