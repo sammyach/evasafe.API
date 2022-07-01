@@ -1,5 +1,5 @@
 using EmailManager;
-using evasafe.API.Data;
+using evasafe.API.data;
 using evasafe.API.Helpers;
 using Microsoft.EntityFrameworkCore;
 
